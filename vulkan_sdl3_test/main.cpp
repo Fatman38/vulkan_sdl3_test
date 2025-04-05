@@ -5,7 +5,11 @@
 #include <SDL3/SDL_vulkan.h>
 #include <vulkan/vulkan.h>
 
+#define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <chrono>
 
 #include <iostream>
 #include <stdexcept>
@@ -85,6 +89,12 @@ const std::vector<uint16_t> indices = {
    0, 1, 2, 2, 3, 0
 };
 
+struct UniformBufferObject {
+   glm::mat4 model;
+   glm::mat4 view;
+   glm::mat4 proj;
+};
+
 //extern void handle_error(void);
 //#ifndef VK_EXT_DEBUG_REPORT_EXTENSION_NAME
 //#define VK_EXT_DEBUG_REPORT_EXTENSION_NAME "VK_EXT_debug_report"
@@ -122,11 +132,13 @@ private:
       createSwapChain();
       createImageViews();
       createRenderPass();
+      createDescriptorSetLayout();
       createGraphicsPipeline();
       createFramebuffers();
       createCommandPool();
       createVertexBuffer();
       createIndexBuffer();
+      createUniformBuffers();
       createCommandBuffers();
       createSyncObjects();
    }
@@ -242,6 +254,20 @@ private:
       vkDestroyBuffer(device, stagingBuffer, nullptr);
       vkFreeMemory(device, stagingBufferMemory, nullptr);
   }
+
+   void createUniformBuffers() {
+      VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+
+      uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+      uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+      uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+      for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+         createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
+
+         vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
+      }
+   }
 
    void createSyncObjects() {
       imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
@@ -426,6 +452,25 @@ private:
       return buffer;
    }
 
+   void createDescriptorSetLayout() {
+      VkDescriptorSetLayoutBinding uboLayoutBinding{};
+      uboLayoutBinding.binding = 0;
+      uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      uboLayoutBinding.descriptorCount = 1;
+
+      uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+      uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
+
+      VkDescriptorSetLayoutCreateInfo layoutInfo{};
+      layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+      layoutInfo.bindingCount = 1;
+      layoutInfo.pBindings = &uboLayoutBinding;
+
+      if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+         throw std::runtime_error("failed to create descriptor set layout!");
+      }
+   }
+
    void createGraphicsPipeline() {
       auto vertShaderCode = readFile("shaders/vert.spv");
       auto fragShaderCode = readFile("shaders/frag.spv");
@@ -508,8 +553,8 @@ private:
 
       VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
       pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-      pipelineLayoutInfo.setLayoutCount = 0;
-      pipelineLayoutInfo.pushConstantRangeCount = 0;
+      pipelineLayoutInfo.setLayoutCount = 1;
+      pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
 
       if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
          throw std::runtime_error("failed to create pipeline layout!");
@@ -803,6 +848,20 @@ private:
       vkDeviceWaitIdle(device);
    }
 
+   void updateUniformBuffer(uint32_t currentImage) {
+      static auto startTime = std::chrono::high_resolution_clock::now();
+
+      auto currentTime = std::chrono::high_resolution_clock::now();
+      float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+      UniformBufferObject ubo{};
+      ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+      ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+      ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
+      ubo.proj[1][1] *= -1;
+      memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+   }
+
    void drawFrame() {
       vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
@@ -816,6 +875,8 @@ private:
       else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
          throw std::runtime_error("failed to acquire swap chain image!");
       }
+
+      updateUniformBuffer(currentFrame);
 
       // Only reset the fence if we are submitting work
       vkResetFences(device, 1, &inFlightFences[currentFrame]);
@@ -1042,6 +1103,13 @@ private:
    void cleanup() {
       cleanupSwapChain();
 
+      for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+         vkDestroyBuffer(device, uniformBuffers[i], nullptr);
+         vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
+      }
+
+      vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+
       vkDestroyBuffer(device, indexBuffer, nullptr);
       vkFreeMemory(device, indexBufferMemory, nullptr);
 
@@ -1159,6 +1227,7 @@ private:
    VkFormat swapChainImageFormat;
    VkExtent2D swapChainExtent;
    std::vector<VkImageView> swapChainImageViews;
+   VkDescriptorSetLayout descriptorSetLayout;
    VkPipelineLayout pipelineLayout;
    VkRenderPass renderPass;
    VkPipeline graphicsPipeline;
@@ -1173,6 +1242,10 @@ private:
    VkDeviceMemory vertexBufferMemory;
    VkBuffer indexBuffer;
    VkDeviceMemory indexBufferMemory;
+
+   std::vector<VkBuffer> uniformBuffers;
+   std::vector<VkDeviceMemory> uniformBuffersMemory;
+   std::vector<void*> uniformBuffersMapped;
 };
 
 int main(int argc, char* argv[]) {
