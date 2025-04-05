@@ -2,4 +2,4 @@
 x64/*
 vulkan_sdl3_test/x64
 vulkan_sdl3_test/shaders/*.spv
-.vscode/settings.json
+.vscode/
