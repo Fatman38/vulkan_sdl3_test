@@ -64,26 +64,26 @@ struct Vertex {
    }
 };
 
-// const std::vector<Vertex> vertices = { // triangle
-//   {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-//   {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-//   {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
-// };
+//const std::vector<Vertex> vertices = { // triangle
+//  {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+//  {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+//  {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+//};
 
-// const std::vector<uint16_t> indices = {
-//   0, 1, 2
-// };
+//const std::vector<uint16_t> indices = {
+//  0, 1, 2
+//};
 
- const std::vector<Vertex> vertices = { // rectangle
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
- };
+const std::vector<Vertex> vertices = { // rectangle
+   {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+   {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+   {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+   {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+};
 
- const std::vector<uint16_t> indices = {
-    0, 1, 2, 2, 3, 0
- };
+const std::vector<uint16_t> indices = {
+   0, 1, 2, 2, 3, 0
+};
 
 //extern void handle_error(void);
 //#ifndef VK_EXT_DEBUG_REPORT_EXTENSION_NAME
